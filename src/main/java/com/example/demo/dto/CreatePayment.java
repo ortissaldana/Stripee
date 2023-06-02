@@ -17,8 +17,8 @@ public class CreatePayment {
 
     private String id;
 
-    public Integer getAmount() {
-        return amount;
+    public Long getAmount() {
+        return (long) amount;
     }
 
     public void setAmount(Integer amount) {

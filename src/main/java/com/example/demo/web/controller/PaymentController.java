@@ -82,12 +82,33 @@ public class PaymentController {
 
 
             PaymentIntent paymentIntent = PaymentIntent.create(createParams);
-
             return new CreatePaymentResponse(paymentIntent.getClientSecret());
         } catch (StripeException e) {
             throw new RuntimeException(e);
         }
     }
+
+    @PostMapping("/create-payment-intent2")
+    public CreatePaymentResponse createPaymentIntent2(@RequestParam("paymentMethodId") String paymentMethodId) {
+        try {
+            Stripe.apiKey = SECRET_KEY; // Reemplaza con tu Stripe Secret Key
+
+            PaymentIntentCreateParams createParams = new PaymentIntentCreateParams.Builder()
+                    .setCurrency("MXN")
+                    .setAmount(1000L) // Reemplaza con el monto deseado en centavos
+                    .setCustomer("cus_NrqZuXNiuXF4Ph") // Reemplaza con el ID del cliente
+                    .setPaymentMethod("pm_1NEC9lAW1QMD0rAREbajGSqe") // Reemplaza con el ID del método de pago
+                    .build();
+
+            PaymentIntent paymentIntent = PaymentIntent.create(createParams);
+            paymentIntent.confirm();
+            return new CreatePaymentResponse(paymentIntent.getClientSecret());
+        } catch (StripeException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
 
 
 

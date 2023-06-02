@@ -4,6 +4,7 @@ import com.example.demo.dto.CreatePayment;
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Customer;
+import com.stripe.model.PaymentIntent;
 import com.stripe.model.SetupIntent;
 import com.stripe.net.RequestOptions;
 import com.stripe.param.PaymentIntentCreateParams;
@@ -107,6 +108,28 @@ public class SetUpIntent {
     }
 
 
+
+    @PostMapping("/create-setup-intenttt")
+    public CreatePaymentResponse createPaymentIntent4(@RequestParam("paymentMethodId") String paymentMethodId) {
+        try {
+            Stripe.apiKey = SECRET_KEY; // Reemplaza con tu Stripe Secret Key
+
+            SetupIntentCreateParams createParams = new SetupIntentCreateParams.Builder()
+
+                    .setCustomer("cus_NrqZuXNiuXF4Ph")
+                    .setPaymentMethod("pm_1NEC9lAW1QMD0rAREbajGSqe")
+                    .build();
+
+
+
+            SetupIntent setupIntent = SetupIntent.create(createParams);
+            SetupIntent confirmedIntent = setupIntent.confirm();
+
+            return new CreatePaymentResponse(setupIntent.getClientSecret());
+        } catch (StripeException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     @GetMapping("/config2")
     public ConfigResponse getConfig() {
