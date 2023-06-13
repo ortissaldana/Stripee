@@ -69,6 +69,7 @@ public class PaymentController {
                     .setAmount(40000000L) // Reemplaza con el monto deseado
                     .setDescription("Pago por transferencia a DriveAI")
                     .setCustomer("cus_NrqZuXNiuXF4Ph")
+                    .setReceiptEmail("ortissaldana@icloud.com")
                     .addAllPaymentMethodType(metodos)
                     .setPaymentMethodData(PaymentIntentCreateParams.PaymentMethodData.builder()
                             .putExtraParam("type", "customer_balance")
