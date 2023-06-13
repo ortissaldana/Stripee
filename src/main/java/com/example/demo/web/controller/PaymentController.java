@@ -1,18 +1,27 @@
 package com.example.demo.web.controller;
 import com.example.demo.dto.CreatePayment;
 import com.example.demo.dto.CreatePaymentResponse;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonDeserializer;
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.*;
 import com.stripe.net.RequestOptions;
+import com.stripe.param.CustomerListParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
-
-import static java.util.stream.Collectors.toList;
 
 
 @RestController
@@ -57,8 +66,8 @@ public class PaymentController {
             PaymentIntentCreateParams createParams = new PaymentIntentCreateParams.Builder()
 
                     .setCurrency("mxn") // Reemplaza con la moneda deseada
-                    .setAmount(1000L) // Reemplaza con el monto deseado
-                    .setDescription("uuwu")
+                    .setAmount(4000000L) // Reemplaza con el monto deseado
+                    .setDescription("Pago por transferencia a DriveAI")
                     .setCustomer("cus_NrqZuXNiuXF4Ph")
                     .addAllPaymentMethodType(metodos)
                     .setPaymentMethodData(PaymentIntentCreateParams.PaymentMethodData.builder()
@@ -89,15 +98,15 @@ public class PaymentController {
     }
 
     @PostMapping("/create-payment-intent2")
-    public CreatePaymentResponse createPaymentIntent2(@RequestParam("paymentMethodId") String paymentMethodId) {
+    public CreatePaymentResponse createPaymentIntent2(@RequestParam("paymentMethodId") String paymentMethodId, @RequestParam("price") Long price) {
         try {
             Stripe.apiKey = SECRET_KEY; // Reemplaza con tu Stripe Secret Key
 
             PaymentIntentCreateParams createParams = new PaymentIntentCreateParams.Builder()
                     .setCurrency("MXN")
-                    .setAmount(1000L) // Reemplaza con el monto deseado en centavos
+                    .setAmount(price) // Utiliza el precio recibido como parámetro
                     .setCustomer("cus_NrqZuXNiuXF4Ph") // Reemplaza con el ID del cliente
-                    .setPaymentMethod("pm_1NEC9lAW1QMD0rAREbajGSqe") // Reemplaza con el ID del método de pago
+                    .setPaymentMethod(paymentMethodId) // Reemplaza con el ID del método de pago
                     .build();
 
             PaymentIntent paymentIntent = PaymentIntent.create(createParams);
@@ -112,68 +121,108 @@ public class PaymentController {
 
 
 
-
-    @GetMapping("/customers")
-    public Map<String, List<Charge>> getAllCustomers() {
-        String secretKey = "your_stripe_secret_key";
-
+    @GetMapping("/transactions")
+    public ResponseEntity<String> getAllTransactions() throws StripeException {
         Stripe.apiKey = SECRET_KEY;
 
-        Map<String, List<Charge>> customerTransactions = new HashMap<>();
+        List<Map<String, Object>> allTransactions = new ArrayList<>();
 
-        Map<String, Object> params = new HashMap<>();
-        params.put("limit", 100); // Set the number of customers to retrieve per page
+        CustomerListParams.Builder customerParamsBuilder = CustomerListParams.builder()
+                .setLimit(100L); // Establece el número de clientes que se recuperarán por página
 
-        try {
-            CustomerCollection customers = Customer.list(params);
+        while (true) {
+            CustomerCollection customers = Customer.list(customerParamsBuilder.build());
 
-            // Process the customers object and extract the customer data as needed
             for (Customer customer : customers.getData()) {
-                String customerId = customer.getId();
+                // Obtén todas las transacciones para el cliente, incluidas las transacciones de prueba
+                List<Map<String, Object>> transactions = getAllCustomerTransactions(customer.getId());
 
-                // Get all charges for the customer, including test charges
-                List<Charge> charges = getAllCustomerCharges(customerId);
-
-                // Filter charges to include only approved charges
-                List<Charge> approvedCharges = charges.stream()
-                        .filter(charge -> "succeeded".equals(charge.getStatus()))
-                        .collect(Collectors.toList());
-
-                // Store the transactions in the data structure
-                customerTransactions.put(customerId, approvedCharges);
-
-                // Example: Print the customer ID and their transactions
-
+                // Agrega las transacciones a la lista general
+                allTransactions.addAll(transactions);
             }
 
-            return customerTransactions;
-        } catch (StripeException e) {
-            e.printStackTrace();
-            return Collections.emptyMap();
+            if (!customers.getHasMore()) {
+                break;
+            }
+
+            customerParamsBuilder.setStartingAfter(customers.getData().get(customers.getData().size() - 1).getId());
         }
+
+        Gson gson = new GsonBuilder()
+                .registerTypeAdapter(LocalDateTime.class, (JsonDeserializer<LocalDateTime>) (json, typeOfT, context) ->
+                        LocalDateTime.ofInstant(Instant.ofEpochSecond(json.getAsJsonPrimitive().getAsLong()), ZoneOffset.UTC))
+                .create();
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(gson.toJson(allTransactions));
     }
 
-    private List<Charge> getAllCustomerCharges(String customerId) throws StripeException {
-        List<Charge> charges = new ArrayList<>();
+    private List<Map<String, Object>> getAllCustomerTransactions(String customerId) throws StripeException {
+        List<Map<String, Object>> transactions = new ArrayList<>();
 
         Map<String, Object> params = new HashMap<>();
         params.put("customer", customerId);
-        params.put("limit", 10); // Set the number of charges to retrieve per page
-        params.put("expand", Arrays.asList("data.payment_intent")); // Include payment_intent in the response
+        params.put("limit", 10); // Establece el número de transacciones que se recuperarán por página
 
         ChargeCollection chargeCollection = Charge.list(params);
 
-        // Iterate over the charges and extract the transaction data as needed
         for (Charge charge : chargeCollection.getData()) {
-            // Include only test charges or charges with a payment_intent (live charges)
-            if (charge.getPaymentIntent() != null || charge.getLivemode()) {
-                charges.add(charge);
-            }
+            Map<String, Object> transactionData = new HashMap<>();
+            transactionData.put("fecha", formatTimestamp(charge.getCreated()));
+            transactionData.put("tipo_movimiento", charge.getObject());
+            transactionData.put("monto", charge.getAmount());
+            transactionData.put("customer_id", customerId);
+            transactionData.put("transaccion_id", charge.getId());
+            transactionData.put("referencia_pago", charge.getPaymentMethod());
+
+            transactions.add(transactionData);
         }
 
-        return charges;
+        return transactions;
     }
 
+    private String formatTimestamp(Long timestamp) {
+        LocalDateTime date = LocalDateTime.ofInstant(Instant.ofEpochSecond(timestamp), ZoneOffset.UTC);
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        return date.format(formatter);
+    }
+
+    @GetMapping("/bank-accounts")
+    public ResponseEntity<List<Map<String, String>>> getAllCustomerBankAccounts() {
+        Stripe.apiKey = SECRET_KEY;
+
+        try {
+            CustomerCollection customers = Customer.list((Map<String, Object>) null);
+
+            List<Map<String, String>> bankAccountsList = new ArrayList<>();
+
+            for (Customer customer : customers.getData()) {
+                List<PaymentSource> paymentSources = customer.getSources().getData();
+
+                for (PaymentSource paymentSource : paymentSources) {
+                    if (paymentSource instanceof BankAccount) {
+                        BankAccount bankAccount = (BankAccount) paymentSource;
+
+                        Map<String, String> bankAccountData = new HashMap<>();
+                        bankAccountData.put("customer_id", customer.getId());
+                        bankAccountData.put("account_number", bankAccount.getLast4());
+                        bankAccountData.put("routing_number", bankAccount.getRoutingNumber());
+                        bankAccountData.put("bank_name", bankAccount.getBankName());
+
+                        bankAccountsList.add(bankAccountData);
+                    }
+                }
+            }
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(bankAccountsList);
+        } catch (StripeException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
 }
 
 //package com.example.demo.web.controller;
