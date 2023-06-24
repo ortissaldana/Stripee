@@ -104,6 +104,7 @@ public class PaymentController {
             Stripe.apiKey = SECRET_KEY; // Reemplaza con tu Stripe Secret Key
 
             PaymentIntentCreateParams createParams = new PaymentIntentCreateParams.Builder()
+                    .setAmount(100L)
                     .setCurrency("MXN")
                     .setAmount(price) // Utiliza el precio recibido como parámetro
                     .setCustomer("cus_NrqZuXNiuXF4Ph") // Reemplaza con el ID del cliente
