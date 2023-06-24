@@ -66,7 +66,7 @@ public class PaymentController {
             PaymentIntentCreateParams createParams = new PaymentIntentCreateParams.Builder()
 
                     .setCurrency("mxn") // Reemplaza con la moneda deseada
-                    .setAmount(40000000L) // Reemplaza con el monto deseado
+                    .setAmount(100L) // Reemplaza con el monto deseado
                     .setDescription("Pago por transferencia a DriveAI")
                     .setCustomer("cus_NrqZuXNiuXF4Ph")
                     .setReceiptEmail("ortissaldana@icloud.com")
